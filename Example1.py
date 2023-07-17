@@ -1,3 +1,4 @@
+import csv
 import os
 import zipfile
 import aiofiles
@@ -69,9 +70,67 @@ async def create_files():
     await asyncio.gather(*tasks)
 
 
+async def parse_xml_file(zip_file, xml_file):
+    try:
+        with zipfile.ZipFile(zip_file, 'r') as archive:
+            xml_content = archive.read(xml_file)
+    except Exception as e:
+        print(f"Error reading XML file {xml_file} from zip file {zip_file}: {e}")
+        return None, None, []
+
+    try:
+        root = etree.fromstring(xml_content)
+        id_value_element = root.find('.//var[@name="id"]')
+        level_value_element = root.find('.//var[@name="level"]')
+
+        id_value = id_value_element.get('value') if id_value_element is not None else None
+        level_value = level_value_element.get('value') if level_value_element is not None else None
+
+        object_names = [obj.get('name') for obj in root.findall('.//objects/object')]
+
+        return id_value, level_value, object_names
+    except Exception as e:
+        print(f"Error parsing XML file {xml_file} from zip file {zip_file}: {e}")
+        return None, None, []
+
+
+async def parse_zip_archives():
+    zip_files = [f'zipped/archive_{i}.zip' for i in range(50)]
+
+    id_level_lines = []
+    id_object_lines = []
+
+    for zip_file in zip_files:
+        try:
+            with zipfile.ZipFile(zip_file, 'r') as archive:
+                xml_files = [name for name in archive.namelist() if name.endswith('.xml')]
+                for xml_file in xml_files:
+                    id_value, level_value, object_names = await parse_xml_file(zip_file, xml_file)
+                    if id_value and level_value:
+                        id_level_lines.append([id_value, level_value])
+                    for object_name in object_names:
+                        if object_name:
+                            id_object_lines.append([id_value, object_name])
+        except Exception as e:
+            print(f"Error parsing zip file {zip_file}: {e}")
+
+    # Write id, level lines to the first CSV file
+    with open('id_level.csv', 'w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerows(id_level_lines)
+
+    # Write id, object_name lines to the second CSV file
+    with open('id_object.csv', 'w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerows(id_object_lines)
+
+    print("CSV files generated")
+
+
 async def main():
+    os.makedirs("zipped", exist_ok=True)  # Create the 'zipped' directory if it doesn't exist
     await create_files()
     await create_zip_archives()
-
+    await parse_zip_archives()
 
 asyncio.run(main())
