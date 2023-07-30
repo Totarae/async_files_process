@@ -59,10 +59,23 @@ async def task_a(event_index):
 
 async def task_b(event_index):
     await events[event_index].wait()
+    os.makedirs('zipped', exist_ok=True)
+    zip_file = zipfile.ZipFile(f'zipped/archive_{event_index}.zip', 'w', zipfile.ZIP_DEFLATED)
+    files_to_zip = os.listdir("output")[:FILES_IN_ARCHIVE]
 
-    for file in os.listdir("output"):
-        if file.endswith(f"_{event_index}.xml"):
-            print(os.path.join("output", file))
+    for file in files_to_zip:
+        #if file.endswith(f"_{event_index}.xml"):
+        #print('To be zipped:')
+        file_path = os.path.join("output", file)  # Join the file name with the path
+        print('To be zipped: ', file_path)
+        zip_file.write(file_path, file)
+
+        # Delete the file from the "output" directory
+        os.remove(file_path)
+
+
+    print('Zip archive created: ', zip_file.filename)
+    zip_file.close()
 
     print(f'Completed {event_index} event')
     events[event_index].clear()
@@ -71,11 +84,12 @@ async def task_b(event_index):
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
     try:
-        for i in range(TOTAL_ZIPS):
-            loop.create_task(task_a(i))
-            loop.create_task(task_b(i))
-       #loop.run_forever()
-        loop.run_until_complete(asyncio.wait([task_b(i) for i in range(TOTAL_ZIPS)]))
+        # Create and await task_a tasks
+        loop.run_until_complete(asyncio.gather(*(task_a(i) for i in range(TOTAL_ZIPS))))
+
+        # Create and await task_b tasks
+        tasks_b = [task_b(i) for i in range(TOTAL_ZIPS)]
+        loop.run_until_complete(asyncio.gather(*tasks_b))
     except KeyboardInterrupt:
         # Stop the event loop gracefully on keyboard interrupt (Ctrl+C)
         for task in asyncio.all_tasks():
