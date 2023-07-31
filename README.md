@@ -18,4 +18,13 @@ Write a program in Python that does the following:
 
 The objects tag has a random number (1 to 10) of nested object tags.
 
-2. Processes the directory with the received zip archives, parses the attached xml files and generates 2 csv files:First: id, level - one line for each xml fileSecond: id, object_name - one line for each object tag (1 to 10 lines for each xml file).
+2. Processes the directory with the received zip archives, parses the attached xml files and generates 2 csv files:
+First: id, level - one line for each xml file 
+Second: id, object_name - one line for each object tag (1 to 10 lines for each xml file).
+
+|          | Condition           |
+|----------|---------------------|
+| Example1 | Used task and await |
+| Example2 | Event loop used     |
+| Example3 | Future used         |
+| Example4 | Queue used          |
