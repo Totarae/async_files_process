@@ -1,3 +1,4 @@
+import csv
 import random
 import os
 import zipfile
@@ -73,16 +74,16 @@ async def consume(queue, index):
             zip_file.write(file_path, arcname=arcname)
 
             # Delete the file from the "output" directory
-            #os.remove(file_path)
+            # os.remove(file_path)
 
         zip_file.close()
         # Notify the queue that the item has been processed
         print(f'task: {index} Done! , queue_size={queue.qsize()}')
-        #if index == TOTAL_ZIPS-1 and queue.empty():
-            #pending = asyncio.all_tasks()
-            #for task in pending:
-                #print(task)
-            #break
+        # if index == TOTAL_ZIPS-1 and queue.empty():
+        # pending = asyncio.all_tasks()
+        # for task in pending:
+        # print(task)
+        # break
 
 
 async def produce(queue, n):
@@ -90,10 +91,71 @@ async def produce(queue, n):
         filename = f'file_{x}.xml'
         file_path = os.path.join("output", filename)
         # produce an item
-        #print(f'producing {x}/{n}')
+        # print(f'producing {x}/{n}')
         item = await make_file(file_path)
         # put the item in the queue
         await queue.put(item)
+
+
+async def gatherArchives(queue):
+    for i in range(TOTAL_ZIPS):
+        item = f'zipped/archive_{i}.zip'
+        await queue.put(item)
+
+async def parse_xml_file(zip_file, xml_file):
+    try:
+        with zipfile.ZipFile(zip_file, 'r') as archive:
+            xml_content = archive.read(xml_file)
+    except Exception as e:
+        print(f"Error reading XML file {xml_file} from zip file {zip_file}: {e}")
+        return None, None, []
+
+    try:
+        root = etree.fromstring(xml_content)
+        id_value_element = root.find('.//var[@name="id"]')
+        level_value_element = root.find('.//var[@name="level"]')
+
+        id_value = id_value_element.get('value') if id_value_element is not None else None
+        level_value = level_value_element.get('value') if level_value_element is not None else None
+
+        object_names = [obj.get('name') for obj in root.findall('.//objects/object')]
+
+        return id_value, level_value, object_names
+    except Exception as e:
+        print(f"Error parsing XML file {xml_file} from zip file {zip_file}: {e}")
+        return None, None, []
+
+
+async def resultFiles(queue):
+    zip_files = [f'zipped/archive_{i}.zip' for i in range(TOTAL_ZIPS)]
+
+    id_level_lines = []
+    id_object_lines = []
+    for zip_file in zip_files:
+        try:
+            with zipfile.ZipFile(zip_file, 'r') as archive:
+                xml_files = [name for name in archive.namelist() if name.endswith('.xml')]
+                for xml_file in xml_files:
+                    id_value, level_value, object_names = await parse_xml_file(zip_file, xml_file)
+                    if id_value and level_value:
+                        id_level_lines.append([id_value, level_value])
+                    for object_name in object_names:
+                        if object_name:
+                            id_object_lines.append([id_value, object_name])
+        except Exception as e:
+            print(f"Error parsing zip file {zip_file}: {e}")
+
+    # Write id, level lines to the first CSV file
+    with open('id_level.csv', 'w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerows(id_level_lines)
+
+    # Write id, object_name lines to the second CSV file
+    with open('id_object.csv', 'w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerows(id_object_lines)
+
+    print("CSV files generated")
 
 
 async def main():
@@ -116,6 +178,11 @@ async def main():
 
     # wait until all worker tasks are cancelled
     await asyncio.gather(*consumers, return_exceptions=True)
+
+    while not queue.empty():
+        queue.get_nowait()
+    # new interchange
+    await asyncio.gather(gatherArchives(queue), resultFiles(queue))
 
 
 asyncio.run(main())
