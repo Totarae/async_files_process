@@ -26,5 +26,4 @@ Second: id, object_name - one line for each object tag (1 to 10 lines for each x
 |----------|---------------------|
 | Example1 | Used task and await |
 | Example2 | Event loop used     |
-| Example3 | Future used         |
-| Example4 | Queue used          |
+| Example3 | Queue used          |
